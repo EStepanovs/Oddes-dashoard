@@ -1,22 +1,20 @@
 <template>
   <div class="about">
     <h1>Data from data_by_roberts table</h1>
-    
-    <div v-if="loading" class="loading">
-      Loading data...
-    </div>
-    
+
+    <div v-if="loading" class="loading">Loading data...</div>
+
     <div v-else-if="error" class="error">
       <p>Error loading data: {{ error }}</p>
     </div>
-    
+
     <div v-else-if="data.length === 0" class="no-data">
       No data found in the table.
     </div>
-    
+
     <div v-else class="data-container">
       <p>Found {{ data.length }} records:</p>
-      
+
       <div class="table-wrapper">
         <table class="data-table">
           <thead>
@@ -38,43 +36,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { supabase } from '../lib/supabase'
+import { ref, onMounted, computed } from "vue";
+import { supabase } from "../lib/supabase";
 
-const data = ref<any[]>([])
-const loading = ref(true)
-const error = ref<string | null>(null)
+const data = ref<any[]>([]);
+const loading = ref(true);
+const error = ref<string | null>(null);
 
 const columns = computed(() => {
-  if (data.value.length === 0) return []
-  return Object.keys(data.value[0])
-})
+  if (data.value.length === 0) return [];
+  return Object.keys(data.value[0]);
+});
 
 const fetchData = async () => {
   try {
-    loading.value = true
-    error.value = null
-    
+    loading.value = true;
+    error.value = null;
+
     const { data: tableData, error: fetchError } = await supabase
-      .from('data_by_roberts')
-      .select('*')
-    
+      .from("data_by_roberts")
+      .select("*");
+
     if (fetchError) {
-      throw fetchError
+      throw fetchError;
     }
-    
-    data.value = tableData || []
+
+    data.value = tableData || [];
   } catch (err: any) {
-    error.value = err.message || 'An error occurred while fetching data'
-    console.error('Error fetching data:', err)
+    error.value = err.message || "An error occurred while fetching data";
+    console.error("Error fetching data:", err);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 onMounted(() => {
-  fetchData()
-})
+  fetchData();
+});
 </script>
 
 <style scoped>
@@ -159,7 +157,7 @@ h1 {
   .about {
     padding: 1rem;
   }
-  
+
   .data-table th,
   .data-table td {
     padding: 0.5rem;
