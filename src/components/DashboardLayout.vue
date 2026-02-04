@@ -10,9 +10,6 @@
           <RouterLink to="/" :class="{ active: $route.path === '/' }">
             Overview
           </RouterLink>
-          <RouterLink to="/data" :class="{ active: $route.path === '/data' }">
-            Data Table
-          </RouterLink>
         </div>
       </div>
     </nav>

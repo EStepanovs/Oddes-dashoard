@@ -38,6 +38,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
 import { Bar, Line, Doughnut, Pie } from "vue-chartjs";
 import type { ChartData } from "@/services/dataService";
@@ -52,6 +53,7 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
+  Filler,
 );
 
 interface Props {
