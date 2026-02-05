@@ -563,11 +563,6 @@ const leadPipeline = computed(() => {
     // Normalize similar stage names to avoid duplicates
     stage = stage.toLowerCase().replace(/[_-]/g, " ").trim();
 
-    // Consolidate similar meeting-related stages
-    if (stage.includes("meeting") && stage.includes("book")) {
-      stage = "Meeting Booked";
-    }
-
     // Capitalize first letter of each word for display
     stage = stage.replace(/\b\w/g, (l: string) => l.toUpperCase());
 
