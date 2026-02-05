@@ -729,6 +729,10 @@ const loadTableData = async () => {
 
     if (countError) {
       console.error("Count error:", countError);
+      if (countError.message?.includes('JWT') || countError.message?.includes('row-level security')) {
+        throw new Error('Authentication required. Please check your Supabase table permissions.');
+      }
+      throw countError;
     }
 
     totalCount.value = count || 0;

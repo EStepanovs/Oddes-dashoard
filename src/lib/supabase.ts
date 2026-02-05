@@ -10,4 +10,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
   });
 }
 
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "");
+// Get the current URL for redirects
+const getURL = () => {
+  let url = window?.location?.origin || 'http://localhost:5173';
+  return url;
+};
+
+export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "", {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    redirectTo: getURL()
+  }
+});
