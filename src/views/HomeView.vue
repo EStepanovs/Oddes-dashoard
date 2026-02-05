@@ -17,14 +17,42 @@
     <div v-else>
       <!-- Dashboard Controls -->
       <div class="dashboard-controls">
-        <div class="period-selector-wrapper">
-          <button
-            class="period-btn"
-            @click="showPeriodSelector = !showPeriodSelector"
-          >
-            {{ getPeriodLabel() }}
-            <span class="dropdown-arrow">▼</span>
-          </button>
+        <div class="controls-row">
+          <!-- Custom Date Range Inputs (positioned left of dropdown) -->
+          <div v-if="selectedPeriod === 'custom'" class="custom-date-picker">
+            <div class="date-inputs">
+              <div class="date-input-group">
+                <label>From:</label>
+                <input 
+                  type="date" 
+                  v-model="customStartDateISO" 
+                  @change="applyCustomPeriod"
+                  :max="customEndDateISO || getTodayDate()"
+                  class="date-input"
+                />
+              </div>
+              <div class="date-input-group">
+                <label>To:</label>
+                <input 
+                  type="date" 
+                  v-model="customEndDateISO" 
+                  @change="applyCustomPeriod"
+                  :min="customStartDateISO"
+                  :max="getTodayDate()"
+                  class="date-input"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div class="period-selector-wrapper">
+            <button
+              class="period-btn"
+              @click="showPeriodSelector = !showPeriodSelector"
+            >
+              {{ getPeriodLabel() }}
+              <span class="dropdown-arrow">▼</span>
+            </button>
           <div v-if="showPeriodSelector" class="period-dropdown">
             <button
               @click="changePeriod('today')"
@@ -68,17 +96,24 @@
             >
               All Time
             </button>
+            <button
+              @click="changePeriod('custom')"
+              :class="{ active: selectedPeriod === 'custom' }"
+            >
+              Custom Range
+            </button>
           </div>
+          </div>
+          <button class="control-btn" @click="loadDashboardData">
+            Refresh Data
+          </button>
         </div>
-        <button class="control-btn" @click="loadDashboardData">
-          Refresh Data
-        </button>
       </div>
 
       <!-- Top Metrics Row -->
       <div class="top-metrics-row">
         <div class="metric-card">
-          <h3># of Call Initiated</h3>
+          <h3>Call Initiated</h3>
           <div class="metric-value">{{ metrics.callsInitiated }}</div>
           <div
             class="metric-change"
@@ -109,7 +144,7 @@
         </div>
         <div class="metric-card">
           <h3>Cost Per Booking</h3>
-          <div class="metric-value">${{ metrics.costPerBooking }}</div>
+          <div class="metric-value">${{ metrics.costPerBooking.toFixed(2) }}</div>
           <div
             class="metric-change"
             :class="getChangeClass(metrics.costPerBookingChange)"
@@ -119,7 +154,7 @@
         </div>
         <div class="metric-card">
           <h3>Average Cost Per Call</h3>
-          <div class="metric-value">${{ metrics.avgCostPerCall }}</div>
+          <div class="metric-value">${{ metrics.avgCostPerCall.toFixed(2) }}</div>
           <div
             class="metric-change"
             :class="getChangeClass(metrics.avgCostPerCallChange)"
@@ -134,17 +169,17 @@
         <!-- Side Metrics (Left Column) -->
         <div class="side-metrics">
           <div class="metric-card">
-            <h3># of Calls Picked Up</h3>
+            <h3>Calls Picked Up</h3>
             <div class="metric-value">{{ metrics.callsPickedUp }}</div>
           </div>
           <div class="metric-card">
-            <h3># of Meetings Booked</h3>
+            <h3>Meetings Booked</h3>
             <div class="metric-value">{{ metrics.meetingsBooked }}</div>
           </div>
           <div class="metric-card">
             <h3>Money Spent</h3>
             <div class="metric-value">
-              ${{ metrics.moneySpent.toLocaleString() }}
+              ${{ metrics.moneySpent.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') }}
             </div>
           </div>
         </div>
@@ -325,6 +360,33 @@ const tableData = ref<any[]>([]);
 // Time period filter
 const selectedPeriod = ref("today");
 const showPeriodSelector = ref(false);
+
+// Custom date range
+const customStartDate = ref("");
+const customEndDate = ref("");
+
+// ISO format dates for the date inputs
+const customStartDateISO = computed({
+  get: () => customStartDate.value ? parseDateFromDisplay(customStartDate.value).toISOString().split('T')[0] : '',
+  set: (value: string) => {
+    if (value) {
+      customStartDate.value = formatDateForDisplay(new Date(value));
+    } else {
+      customStartDate.value = '';
+    }
+  }
+});
+
+const customEndDateISO = computed({
+  get: () => customEndDate.value ? parseDateFromDisplay(customEndDate.value).toISOString().split('T')[0] : '',
+  set: (value: string) => {
+    if (value) {
+      customEndDate.value = formatDateForDisplay(new Date(value));
+    } else {
+      customEndDate.value = '';
+    }
+  }
+});
 
 // Pagination
 const currentPage = ref(1);
@@ -545,10 +607,28 @@ const refreshData = () => {
 };
 
 const formatDuration = (seconds: number): string => {
-  if (!seconds) return "-";
-  const mins = Math.floor(seconds / 60);
+  if (!seconds) return "0.00s";
+  
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
+  
+  let result = "";
+  
+  if (hours > 0) {
+    result += `${hours}h`;
+  }
+  
+  if (mins > 0) {
+    result += result ? ` ${mins}m` : `${mins}m`;
+  }
+  
+  if (secs > 0) {
+    const formattedSecs = secs.toFixed(2);
+    result += result ? ` ${formattedSecs}s` : `${formattedSecs}s`;
+  }
+  
+  return result || "0.00s";
 };
 
 const formatDate = (dateStr: string): string => {
@@ -655,7 +735,8 @@ const loadTableData = async () => {
     pipelineLoading.value = true;
 
     // Calculate date filter based on selected period
-    const now = new Date();
+    let now = new Date();
+    let endDate = new Date(); // For custom range end date
     let startDate: Date;
 
     switch (selectedPeriod.value) {
@@ -693,6 +774,18 @@ const loadTableData = async () => {
           now.getDate(),
         );
         break;
+      case "custom":
+        if (customStartDate.value) {
+          startDate = parseDateFromDisplay(customStartDate.value);
+        } else {
+          startDate = new Date(2000, 0, 1);
+        }
+        // For custom range, we also need to limit the end date
+        if (customEndDate.value) {
+          endDate = parseDateFromDisplay(customEndDate.value);
+          endDate.setHours(23, 59, 59, 999); // End of selected day
+        }
+        break;
       case "all":
       default:
         startDate = new Date(2000, 0, 1); // Very old date to get all data
@@ -700,6 +793,9 @@ const loadTableData = async () => {
     }
 
     const startDateStr = startDate.toISOString();
+    const endDateStr = (selectedPeriod.value === 'custom' && customEndDate.value) 
+      ? endDate.toISOString() 
+      : now.toISOString();
 
     // Calculate previous period dates for comparison
     let prevStartDate: Date;
@@ -834,9 +930,19 @@ const loadTableData = async () => {
 
 const changePeriod = async (period: string) => {
   selectedPeriod.value = period;
-  showPeriodSelector.value = false;
-  currentPage.value = 1; // Reset to first page when changing period
-  await loadTableData();
+  
+  // Don't close dropdown immediately for custom period to allow date selection
+  if (period !== 'custom') {
+    showPeriodSelector.value = false;
+    currentPage.value = 1; // Reset to first page when changing period
+    await loadTableData();
+  } else {
+    // For custom period, just close the dropdown and clear dates
+    showPeriodSelector.value = false;
+    // Clear the date inputs when selecting custom range
+    customStartDate.value = "";
+    customEndDate.value = "";
+  }
 };
 
 const goToPage = async (page: number) => {
@@ -856,8 +962,85 @@ const getPeriodLabel = () => {
     "3months": "Last 3 Months",
     year: "Last Year",
     all: "All Time",
+    custom: customStartDate.value && customEndDate.value 
+      ? `${formatDateLabel(customStartDate.value)} - ${formatDateLabel(customEndDate.value)}`
+      : "Custom Range"
   };
   return labels[selectedPeriod.value] || "Today";
+};
+
+const formatDateLabel = (dateStr: string): string => {
+  if (!dateStr) return "";
+  const date = parseDateFromDisplay(dateStr);
+  if (isNaN(date.getTime())) return "Invalid Date";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+};
+
+const applyCustomPeriod = async () => {
+  // Validate dates
+  if (customStartDate.value && customEndDate.value) {
+    const startDate = parseDateFromDisplay(customStartDate.value);
+    const endDate = parseDateFromDisplay(customEndDate.value);
+    
+    // If end date is before start date, swap them
+    if (endDate < startDate) {
+      const temp = customStartDate.value;
+      customStartDate.value = customEndDate.value;
+      customEndDate.value = temp;
+    }
+    
+    currentPage.value = 1;
+    await loadTableData();
+    showPeriodSelector.value = false;
+  }
+};
+
+// Helper function to get today's date in YYYY-MM-DD format
+const getTodayDate = () => {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+};
+
+// Helper function to format date as DD/MM/YYYY for display
+const formatDateForDisplay = (date: Date | string) => {
+  let dateObj: Date;
+  if (typeof date === 'string') {
+    dateObj = new Date(date);
+  } else {
+    dateObj = date;
+  }
+  
+  if (isNaN(dateObj.getTime())) return '';
+  
+  const day = dateObj.getDate().toString().padStart(2, '0');
+  const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+  const year = dateObj.getFullYear();
+  
+  return `${day}/${month}/${year}`;
+};
+
+// Helper function to parse DD/MM/YYYY back to Date object
+const parseDateFromDisplay = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  
+  // If it's already in YYYY-MM-DD format, use it directly
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return new Date(dateStr);
+  }
+  
+  // Parse DD/MM/YYYY format
+  const match = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) {
+    const [, day, month, year] = match;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+  
+  // Fallback - try to parse as-is
+  return new Date(dateStr);
 };
 
 // Load dashboard data
@@ -959,9 +1142,18 @@ onMounted(() => {
 
 .dashboard-controls {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 1rem;
   margin-bottom: 2rem;
+}
+
+.controls-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  position: relative;
 }
 
 .period-selector-wrapper {
@@ -1515,5 +1707,86 @@ onMounted(() => {
   .top-metrics-row {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Custom Date Picker Styles */
+.custom-date-picker {
+  padding: 0.75rem 1rem;
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.date-inputs {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 110px;
+}
+
+.date-input-group label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #f3f4f6;
+}
+
+.date-input {
+  padding: 0.4rem 0.5rem;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(60, 60, 60, 0.6);
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #4a4a4a;
+  box-shadow: 0 0 0 2px rgba(70, 70, 70, 0.3);
+}
+
+/* Make text inputs look consistent */
+.date-input {
+  color-scheme: dark;
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+  background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3e%3ctext x='14' y='18' text-anchor='middle' style='font-size:16px'%3e📅%3c/text%3e%3c/svg%3e") no-repeat;
+  background-size: 100% 100%;
+  background-position: center;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  opacity: 1;
+  margin: 2px 2px 0 0;
+  padding: 0;
+}
+
+.date-input::-webkit-datetime-edit {
+  color: #ffffff;
+}
+
+.date-input::-webkit-datetime-edit-fields-wrapper {
+  color: #ffffff;
+}
+
+.date-input::-webkit-datetime-edit-text {
+  color: #ffffff;
+}
+
+.date-input::-webkit-datetime-edit-month-field,
+.date-input::-webkit-datetime-edit-day-field,
+.date-input::-webkit-datetime-edit-year-field {
+  color: #ffffff;
 }
 </style>
