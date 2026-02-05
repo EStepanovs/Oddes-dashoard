@@ -1031,7 +1031,9 @@ const parseDateFromDisplay = (dateStr: string): Date => {
   const match = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (match) {
     const [, day, month, year] = match;
-    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    if (day && month && year) {
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    }
   }
   
   // Fallback - try to parse as-is
