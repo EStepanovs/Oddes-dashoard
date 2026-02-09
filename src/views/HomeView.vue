@@ -459,6 +459,12 @@ const metrics = computed(() => {
     );
   }).length;
 
+  // Count dead calls - leads with "dead" in the stage
+  const deadLeads = data.filter((d) => {
+    const stage = (d.lead_stage || "").toLowerCase();
+    return stage.includes("dead");
+  }).length;
+
   const totalCost = data.reduce(
     (sum, d) =>
       sum + (parseFloat(d.total_cost) || parseFloat(d.cost_total) || 0),
@@ -466,7 +472,9 @@ const metrics = computed(() => {
   );
 
   const pickUpRate = totalCalls > 0 ? (pickedUp / totalCalls) * 100 : 0;
-  const bookingRate = totalCalls > 0 ? (meetingsBooked / totalCalls) * 100 : 0;
+  // New booking rate formula: meetings booked / (calls picked up - dead leads) * 100
+  const viablePickedUp = pickedUp - deadLeads;
+  const bookingRate = viablePickedUp > 0 ? (meetingsBooked / viablePickedUp) * 100 : 0;
   const avgCostPerCall = totalCalls > 0 ? totalCost / totalCalls : 0;
   const costPerBooking = meetingsBooked > 0 ? totalCost / meetingsBooked : 0;
 
@@ -501,6 +509,13 @@ const metrics = computed(() => {
         mb === "Yes"
       );
     }).length;
+
+    // Count dead calls in previous period
+    const prevDeadLeads = previousPeriodData.value.filter((d) => {
+      const stage = (d.lead_stage || "").toLowerCase();
+      return stage.includes("dead");
+    }).length;
+
     const prevTotalCost = previousPeriodData.value.reduce(
       (sum, d) =>
         sum + (parseFloat(d.total_cost) || parseFloat(d.cost_total) || 0),
@@ -509,8 +524,10 @@ const metrics = computed(() => {
 
     const prevPickUpRate =
       prevTotalCalls > 0 ? (prevPickedUp / prevTotalCalls) * 100 : 0;
+    // Updated previous period booking rate using new formula
+    const prevViablePickedUp = prevPickedUp - prevDeadLeads;
     const prevBookingRate =
-      prevTotalCalls > 0 ? (prevMeetingsBooked / prevTotalCalls) * 100 : 0;
+      prevViablePickedUp > 0 ? (prevMeetingsBooked / prevViablePickedUp) * 100 : 0;
     const prevAvgCostPerCall =
       prevTotalCalls > 0 ? prevTotalCost / prevTotalCalls : 0;
     const prevCostPerBooking =
