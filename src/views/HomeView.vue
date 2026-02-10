@@ -583,8 +583,30 @@ const leadPipeline = computed(() => {
     // Capitalize first letter of each word for display
     stage = stage.replace(/\b\w/g, (l: string) => l.toUpperCase());
 
+    // Skip "Meeting Booked" from lead_stage since we'll add it based on actual meeting_booked column
+    if (stage.toLowerCase().includes("meeting booked")) {
+      return;
+    }
+
     stageCounts[stage] = (stageCounts[stage] || 0) + 1;
   });
+
+  // Add "Meeting Booked" count based on actual meeting_booked column
+  const meetingsBookedCount = data.filter((d) => {
+    const mb = d.meeting_booked;
+    return (
+      mb === true ||
+      mb === "true" ||
+      mb === 1 ||
+      mb === "1" ||
+      mb === "yes" ||
+      mb === "Yes"
+    );
+  }).length;
+
+  if (meetingsBookedCount > 0) {
+    stageCounts["Meeting Booked"] = meetingsBookedCount;
+  }
 
   // Convert to array and sort by count (descending)
   const stages = Object.entries(stageCounts)
