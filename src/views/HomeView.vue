@@ -586,10 +586,6 @@ const leadPipeline = computed(() => {
     stageCounts[stage] = (stageCounts[stage] || 0) + 1;
   });
 
-  // Don't add "Has Booked Meeting" as it's likely already included in lead_stage values
-  // Let's see what stages we actually have first
-  console.log("Lead stages found:", Object.keys(stageCounts));
-
   // Convert to array and sort by count (descending)
   const stages = Object.entries(stageCounts)
     .map(([name, count]) => ({ name, count }))
@@ -753,14 +749,18 @@ const loadTableData = async () => {
 
     switch (selectedPeriod.value) {
       case "today":
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // Create UTC midnight for today
+        startDate = new Date();
+        startDate.setUTCHours(0, 0, 0, 0);
         break;
       case "yesterday":
-        startDate = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() - 1,
-        );
+        // Create UTC midnight for yesterday and set end date to UTC midnight today
+        startDate = new Date();
+        startDate.setUTCDate(startDate.getUTCDate() - 1);
+        startDate.setUTCHours(0, 0, 0, 0);
+        // For yesterday, we also need to limit the end date to avoid including today's data
+        endDate = new Date();
+        endDate.setUTCHours(0, 0, 0, 0); // Today at UTC midnight
         break;
       case "week":
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -807,6 +807,8 @@ const loadTableData = async () => {
     const startDateStr = startDate.toISOString();
     const endDateStr = (selectedPeriod.value === 'custom' && customEndDate.value) 
       ? endDate.toISOString() 
+      : (selectedPeriod.value === 'yesterday') 
+      ? endDate.toISOString()  // Use the endDate set for yesterday
       : now.toISOString();
 
     // Calculate previous period dates for comparison
@@ -825,15 +827,18 @@ const loadTableData = async () => {
     const prevStartDateStr = prevStartDate.toISOString();
     const prevEndDateStr = prevEndDate.toISOString();
 
-    console.log(`Period: ${selectedPeriod.value}`);
-    console.log(`Current period: ${startDateStr} to ${now.toISOString()}`);
-    console.log(`Previous period: ${prevStartDateStr} to ${prevEndDateStr}`);
-
     // First get total count for pagination
-    const { count, error: countError } = await supabase
+    let countQuery = supabase
       .from("data_by_roberts")
       .select("*", { count: "exact", head: true })
       .gte("created_at", startDateStr);
+    
+    // For yesterday, limit to exclude today's data
+    if (selectedPeriod.value === 'yesterday') {
+      countQuery = countQuery.lt("created_at", endDateStr);
+    }
+    
+    const { count, error: countError } = await countQuery;
 
     if (countError) {
       console.error("Count error:", countError);
@@ -852,10 +857,17 @@ const loadTableData = async () => {
     const batchSize = 1000;
 
     while (true) {
-      const { data: batch, error: batchError } = await supabase
+      let batchQuery = supabase
         .from("data_by_roberts")
         .select("picked_up, meeting_booked, total_cost, cost_total, lead_stage")
-        .gte("created_at", startDateStr)
+        .gte("created_at", startDateStr);
+      
+      // For yesterday, limit to exclude today's data
+      if (selectedPeriod.value === 'yesterday') {
+        batchQuery = batchQuery.lt("created_at", endDateStr);
+      }
+      
+      const { data: batch, error: batchError } = await batchQuery
         .range(batchFrom, batchFrom + batchSize - 1);
 
       if (batchError) {
@@ -866,16 +878,12 @@ const loadTableData = async () => {
       if (!batch || batch.length === 0) break;
 
       allData = allData.concat(batch);
-      console.log(
-        `Fetched batch: ${batch.length} records, total so far: ${allData.length}`,
-      );
 
       if (batch.length < batchSize) break; // Last batch
       batchFrom += batchSize;
     }
 
     allPeriodData.value = allData;
-    console.log(`Total records for metrics: ${allPeriodData.value.length}`);
 
     // Fetch previous period data for comparison (only if not "all time")
     if (selectedPeriod.value !== "all") {
@@ -904,9 +912,6 @@ const loadTableData = async () => {
       }
 
       previousPeriodData.value = prevData;
-      console.log(
-        `Previous period records: ${previousPeriodData.value.length}`,
-      );
     } else {
       previousPeriodData.value = [];
     }
@@ -916,10 +921,17 @@ const loadTableData = async () => {
     const to = from + pageSize - 1;
 
     // Query with date filter and pagination for table
-    const { data, error: fetchError } = await supabase
+    let tableQuery = supabase
       .from("data_by_roberts")
       .select("*")
-      .gte("created_at", startDateStr)
+      .gte("created_at", startDateStr);
+    
+    // For yesterday, limit to exclude today's data
+    if (selectedPeriod.value === 'yesterday') {
+      tableQuery = tableQuery.lt("created_at", endDateStr);
+    }
+    
+    const { data, error: fetchError } = await tableQuery
       .order("created_at", { ascending: false })
       .range(from, to);
 
@@ -929,9 +941,6 @@ const loadTableData = async () => {
     }
 
     tableData.value = data || [];
-    console.log(
-      `Loaded page ${currentPage.value}: ${tableData.value.length} records (Total: ${totalCount.value})`,
-    );
   } catch (err: any) {
     console.error("Error loading data:", err);
     error.value = `Error: ${err.message || "Unknown error"}`;
